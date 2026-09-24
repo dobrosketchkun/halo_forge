@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Halo Forge</title>
+<meta name="description" content="Generate a unique Blue Archive-style halo from a seed. Download it as SVG or PNG.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=Noto+Sans:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1015;
+    --panel: #151821;
+    --panel-2: #1b1f2b;
+    --line: #262b39;
+    --text: #e8eaf1;
+    --muted: #8e94a6;
+    --accent: #86d8ff;
+    --warn: #e8c35d;
+    --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+    --body: "Noto Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: grid; gap: 22px; }
+  header { display: grid; gap: 6px; }
+  h1 { font-family: var(--display); font-weight: 600; font-size: clamp(26px, 5vw, 36px); letter-spacing: .05em; margin: 0; text-wrap: balance; }
+  .lede { color: var(--muted); margin: 0; max-width: 62ch; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  @media (max-width: 800px) { .main { grid-template-columns: 1fr; } }
+  .left { display: grid; gap: 12px; min-width: 0; }
+
+  .stage { position: relative; aspect-ratio: 1 / 1; max-width: 100%; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+           background: radial-gradient(circle at 50% 46%, #1b2030 0%, #0b0d12 72%); display: grid; place-items: center; }
+  .stage.light { background: #f3f4f7; }
+  #art { width: 84%; height: 84%; display: grid; place-items: center; }
+  #art svg { width: 100%; height: 100%; }
+  .stage .corner { position: absolute; font-family: var(--display); font-size: 13px; letter-spacing: .06em; color: var(--muted); }
+  .stage .tl { top: 12px; left: 14px; text-transform: uppercase; }
+  .stage .tr { top: 12px; right: 14px; font-variant-numeric: tabular-nums; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 55%, transparent);
+             font-family: var(--display); letter-spacing: .06em; color: var(--muted); text-align: center; padding: 16px; }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent);
+             animation: spin 0.9s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+  .details { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12.5px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+          padding: 3px 10px; }
+  .chip b { color: var(--text); font-weight: 500; }
+  .chip.dim { opacity: .7; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; display: grid; position: sticky; top: 16px; }
+  @media (max-width: 800px) { .panel { position: static; } }
+  .panel section { padding: 16px; display: grid; gap: 10px; }
+  .panel section + section { border-top: 1px solid var(--line); }
+  .label { font-family: var(--display); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .labelrow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .line { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  input[type="text"], select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  #seed { flex: 1; font-family: var(--display); font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+  select { flex: 1; }
+  button { font: inherit; cursor: pointer; }
+  .btn { font-family: var(--display); font-weight: 600; letter-spacing: .04em; padding: 8px 14px; border-radius: 8px;
+         border: 1px solid var(--line); background: var(--panel-2); color: var(--text); white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn.primary { background: color-mix(in srgb, var(--accent) 18%, var(--panel-2)); border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+  .btn.wide { width: 100%; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; }
+  .linkbtn:disabled { visibility: hidden; }
+  .btn:focus-visible, .linkbtn:focus-visible, input:focus-visible, select:focus-visible, .swatch:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type="color"] { width: 40px; height: 36px; flex: none; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); cursor: pointer; }
+  .hex { width: 6.5em; flex: none; font-family: var(--display); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+  .note { font-size: 12.5px; color: var(--muted); }
+  .swatches { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
+  .swatch { aspect-ratio: 1 / 1; border-radius: 50%; border: 2px solid transparent; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+  .swatch[aria-pressed="true"] { border-color: var(--text); }
+  .checks { display: flex; gap: 16px; flex-wrap: wrap; }
+  .check { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13.5px; cursor: pointer; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.warn { color: var(--warn); }
+  footer { color: var(--muted); font-size: 13px; line-height: 1.7; }
+  footer code { font-family: var(--display); color: var(--text); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Halo Forge</h1>
+    <p class="lede">Every seed forges its own halo. Share the link to show someone yours, or download it as SVG or PNG.</p>
+  </header>
+
+  <div class="main">
+    <div class="left">
+      <div class="stage" id="stage">
+        <span class="corner tl" id="type"></span>
+        <span class="corner tr" id="seedTag"></span>
+        <div id="art" role="img" aria-label="Generated halo"></div>
+        <div class="overlay" id="overlay"><div><div class="spinner"></div><div id="overlayText">Loading the generator…</div></div></div>
+      </div>
+      <div class="details" id="meta"></div>
+    </div>
+
+    <div class="panel">
+      <section>
+        <label class="label" for="seed">Seed</label>
+        <div class="line">
+          <input type="text" id="seed" autocomplete="off" spellcheck="false" maxlength="200" placeholder="a number, a word, a name…">
+          <button class="btn primary" id="go" disabled>Forge</button>
+        </div>
+        <button class="btn wide" id="random" disabled>Random halo</button>
+        <div class="status" id="status" hidden></div>
+      </section>
+
+      <section>
+        <div class="labelrow">
+          <span class="label">Color</span>
+          <button class="linkbtn" id="colorReset" disabled>Use seed color</button>
+        </div>
+        <div class="line">
+          <input type="color" id="colorPick" aria-label="Pick a halo color">
+          <input type="text" id="colorHex" class="hex" maxlength="7" spellcheck="false" aria-label="Halo color as hex">
+          <span class="note" id="colorNote">seed color</span>
+        </div>
+        <div class="swatches" id="swatches" aria-label="Preset colors"></div>
+      </section>
+
+      <section>
+        <span class="label">Download</span>
+        <div class="line">
+          <button class="btn" id="dlSvg" disabled>SVG</button>
+          <button class="btn" id="dlPng" disabled>PNG</button>
+          <select id="size" aria-label="PNG size">
+            <option value="512">512 px</option>
+            <option value="1024" selected>1024 px</option>
+            <option value="2048">2048 px</option>
+          </select>
+        </div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="transparent" checked> Transparent</label>
+          <label class="check"><input type="checkbox" id="lightPreview"> Light preview</label>
+        </div>
+        <button class="btn wide" id="copyLink" disabled>Copy link to this halo</button>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    Pick any color, or keep the seed's own. Any word, name or number is a seed, and the same seed always gives the same halo, here and in the command line tool
+    (<code>python halo_cli.py --seed tralala</code>). Link format: <code>?seed=tralala</code> or <code>?seed=tralala&amp;color=ff8800</code>. The generator runs entirely in your browser.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+<script>
+const PY_FILES = ["__init__.py", "api.py", "build.py", "critic.py", "generate.py", "geom.py", "library.py", "marks.py",
+                  "ornament.py", "render.py"];
+const DATA_FILES = ["kamon_lib.json", "heraldry_lib.json", "preset_factors.json"];
+const TYPE_NAMES = { reticle: "Reticle", flanked_ring: "Flanked ring", crest: "Crest", flower: "Flower", star: "Star",
+  pinwheel: "Pinwheel", polygon_frame: "Polygon frame", emblem: "Emblem", segmented: "Segmented", crescent: "Crescent",
+  knot: "Knot", scatter: "Scatter", kamon: "Kamon", heraldic: "Heraldic", sigil: "Sigil" };
+const $ = id => document.getElementById(id);
+let py = null, api = null, current = null, busy = false;
+let customColor = null;   // "#rrggbb" chosen by the user, or null = the seed's own color
+const PRESETS = ["#7fe7ff", "#8cb4ff", "#b48cff", "#ff8cd9", "#ff7a7a", "#ffb35c", "#ffe066", "#8cf2a2", "#f2f2f2"];
+
+function setStatus(text, warn) {
+  $("status").textContent = text; $("status").classList.toggle("warn", !!warn); $("status").hidden = !text;
+}
+function showOverlay(text) { $("overlayText").textContent = text; $("overlay").hidden = false; }
+function hideOverlay() { $("overlay").hidden = true; }
+function setEnabled(on) {
+  for (const id of ["go", "random", "dlSvg", "dlPng", "copyLink"]) $(id).disabled = !on || (id.startsWith("dl") || id === "copyLink") && !current;
+  $("colorReset").disabled = !on || !customColor;
+}
+
+// A seed is any text; the generator hashes it. Random seeds are just numbers from a huge range.
+function parseSeed(text) {
+  const t = String(text ?? "").trim();
+  return t && t.length <= 200 ? t : null;
+}
+function randomSeed() {
+  const a = new Uint32Array(2); crypto.getRandomValues(a);
+  return String(1 + ((a[0] * 4096 + (a[1] >>> 20)) % 999999999999));
+}
+
+async function initRuntime() {
+    py = await loadPyodide();
+    showOverlay("Loading geometry libraries…");
+    await py.loadPackage(["numpy", "shapely"]);
+    showOverlay("Loading halo generator…");
+    py.FS.mkdirTree("/home/pyodide/halo/data");
+    const fetchText = async path => { const r = await fetch(path); if (!r.ok) throw new Error(path + " " + r.status); return r.text(); };
+    await Promise.all([
+      ...PY_FILES.map(async f => py.FS.writeFile(`/home/pyodide/halo/${f}`, await fetchText(`halo/${f}`))),
+      ...DATA_FILES.map(async f => py.FS.writeFile(`/home/pyodide/halo/data/${f}`, await fetchText(`halo/data/${f}`))),
+    ]);
+    py.runPython("import sys; sys.path.insert(0, '/home/pyodide')");
+    api = py.pyimport("halo.api");
+}
+
+async function boot() {
+  try {
+    await initRuntime();
+    const params = new URLSearchParams(location.search);
+    customColor = normColor(params.get("color"));
+    const urlSeed = parseSeed(params.get("seed"));
+    await forge(urlSeed ?? randomSeed(), true);
+  } catch (e) {
+    console.error(e);
+    showOverlay("The generator could not load. Check your connection and reload the page.");
+    setStatus("Loading failed: " + (e.message || e), true);
+  }
+}
+
+function normColor(text) {
+  let c = String(text ?? "").trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(c)) c = c.split("").map(x => x + x).join("");
+  return /^[0-9a-f]{6}$/i.test(c) ? "#" + c.toLowerCase() : null;
+}
+function shownColor() { return customColor || current?.color || "#7fe7ff"; }
+function pageUrl() {
+  const url = new URL(location.href); url.search = "";
+  if (current) url.searchParams.set("seed", current.seed);
+  if (customColor) url.searchParams.set("color", customColor.slice(1));
+  return url;
+}
+function renderArt() {
+  if (!current) return;
+  const svg = api.svg(current.rec, 512, customColor, null);
+  $("art").innerHTML = svg;
+  $("art").querySelector("svg")?.setAttribute("aria-hidden", "true");
+  $("colorPick").value = shownColor();
+  if (document.activeElement !== $("colorHex")) $("colorHex").value = shownColor();
+  $("colorReset").disabled = !customColor || busy;   // setEnabled() refreshes it when a forge finishes
+  $("colorNote").textContent = customColor ? "custom, kept for new halos" : "seed color";
+  for (const b of $("swatches").children) b.setAttribute("aria-pressed", String(b.dataset.c === customColor));
+}
+function setColor(c) {
+  customColor = c;
+  setStatus("");
+  renderArt();
+  if (current) history.replaceState({ seed: current.seed }, "", pageUrl());
+  renderMeta();
+}
+
+async function forge(seed, replaceUrl) {
+  if (busy || !api) return;
+  busy = true; setEnabled(false);
+  showOverlay(`Forging halo “${seed}”…`);
+  await new Promise(r => setTimeout(r, 30));   // let the overlay paint before the (synchronous) Python run
+  try {
+    const rec = api.halo_for(seed);
+    const info = rec.toJs({ dict_converter: Object.fromEntries });
+    if (current?.rec) current.rec.destroy();
+    current = { seed, rec, type: info.type, color: info.color, desc: info.desc, generator: info.generator };
+    renderArt();
+    $("art").setAttribute("aria-label", `Halo for seed ${seed}, ${TYPE_NAMES[info.type] || info.type} type`);
+    $("type").textContent = TYPE_NAMES[info.type] || info.type;
+    $("seedTag").textContent = seed;
+    $("seedTag").title = seed;
+    $("seed").value = seed;
+    renderMeta();
+    history[replaceUrl ? "replaceState" : "pushState"]({ seed }, "", pageUrl());
+    setStatus("");
+  } catch (e) {
+    console.error(e);
+    setStatus("That halo could not be generated. Restarting the generator…", true);
+    try {
+      showOverlay("Restarting the generator…");
+      await initRuntime();
+      if (current) current.rec = api.halo_for(current.seed);   // the old record belonged to the dead runtime
+      setStatus("The generator restarted. Try again.", true);
+    }
+    catch (e2) { setStatus("The generator stopped working. Reload the page.", true); }
+  } finally {
+    hideOverlay(); busy = false; setEnabled(true);
+  }
+}
+
+function renderMeta() {
+  const d = current.desc || {};
+  const skip = new Set(["skeleton", "variant", "weight", "outward_motif", "hero_phase_deg", "sym", "n", "hero_phase", "tilt", "size"]);
+  const pretty = v => {
+    v = String(v);
+    if (v.startsWith("kamon:") || v.startsWith("her:")) return v.split(":")[1].split("#")[0].replace(/_inverted/g, "").replace(/_/g, " ");
+    if (v.startsWith("mark:")) return "house mark";
+    if (v.startsWith("L:")) return v.split(":")[1] + " edge";
+    return v.replace(/_/g, " ");
+  };
+  const chip = (html, dim) => { const c = document.createElement("span"); c.className = "chip" + (dim ? " dim" : ""); c.innerHTML = html; return c; };
+  const esc = t => String(t).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  const chips = [chip(`<b>${esc(TYPE_NAMES[current.type] || current.type)}</b>`)];
+  for (const [k, v] of Object.entries(d)) {
+    if (skip.has(k) || ["none", "na", "empty", "plain", "closed", "fill", "false", "False", "0"].includes(String(v))) continue;
+    chips.push(chip(`${esc(k.replace(/_/g, " "))} <b>${esc(pretty(v))}</b>`));
+    if (chips.length >= 7) break;
+  }
+  chips.push(chip(`color <b>${customColor || current.color}</b>`));
+  chips.push(chip(`generator ${esc(current.generator)}`, true));
+  $("meta").replaceChildren(...chips);
+}
+
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function svgForExport(size) {
+  const transparent = $("transparent").checked;
+  return api.svg(current.rec, size, customColor, transparent ? null : "#0e1015");
+}
+$("dlSvg").onclick = () => {
+  if (!current) return;
+  download(new Blob([svgForExport(512)], { type: "image/svg+xml" }), `halo_${api.safe_name(current.seed)}.svg`);
+};
+$("dlPng").onclick = async () => {
+  if (!current) return;
+  const size = Number($("size").value);
+  const url = URL.createObjectURL(new Blob([svgForExport(size)], { type: "image/svg+xml" }));
+  try {
+    const img = new Image();
+    await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = url; });
+    const c = document.createElement("canvas"); c.width = c.height = size;
+    c.getContext("2d").drawImage(img, 0, 0, size, size);
+    const name = `halo_${api.safe_name(current.seed)}.png`;
+    c.toBlob(b => b ? download(b, name) : setStatus("Could not create the PNG.", true), "image/png");
+  } catch (e) {
+    setStatus("Could not create the PNG in this browser. Download the SVG instead.", true);
+  } finally { URL.revokeObjectURL(url); }
+};
+$("copyLink").onclick = async () => {
+  const link = pageUrl().toString();
+  try { await navigator.clipboard.writeText(link); setStatus("Link copied."); }
+  catch { $("seed").value = link; $("seed").select(); setStatus("Copy the selected link."); }
+};
+$("go").onclick = () => {
+  const s = parseSeed($("seed").value);
+  if (s === null) { setStatus("Type a seed: any word, name or number (up to 200 characters).", true); return; }
+  forge(s, false);
+};
+$("seed").addEventListener("keydown", e => { if (e.key === "Enter") $("go").click(); });
+$("random").onclick = () => forge(randomSeed(), false);
+for (const c of PRESETS) {
+  const b = document.createElement("button");
+  b.className = "swatch"; b.style.background = c; b.dataset.c = c; b.title = c;
+  b.setAttribute("aria-label", "Use color " + c);
+  b.onclick = () => setColor(c);
+  $("swatches").append(b);
+}
+$("colorPick").addEventListener("input", e => setColor(normColor(e.target.value)));
+$("colorHex").addEventListener("change", e => {
+  const c = normColor(e.target.value);
+  if (c) { setColor(c); setStatus(""); } else { setStatus("Type a hex color such as #ff8800 or f80.", true); e.target.value = shownColor(); }
+});
+$("colorHex").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+$("colorReset").onclick = () => setColor(null);
+$("lightPreview").onchange = e => $("stage").classList.toggle("light", e.target.checked);
+window.addEventListener("popstate", e => { const s = e.state?.seed ?? parseSeed(new URLSearchParams(location.search).get("seed")); if (s !== null) forge(s, true); });
+
+boot();
+</script>
+</body>
+</html>

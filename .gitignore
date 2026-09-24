@@ -1,0 +1,34 @@
+# environment / caches
+.venv/
+__pycache__/
+*.pyc
+
+# CLI output written to the repo root by default
+/halo_*.svg
+/halo_*.png
+/registry.jsonl
+
+# ---- .ignore/: research, review tools and build scripts (not needed to generate halos) ----
+# generated output (renders, grids, previews, review batches)
+.ignore/out/
+
+# third-party reference data - re-download with: python .ignore/research/fetch_refs.py
+.ignore/research/ba_ref/img/
+.ignore/research/ba_ref/sheet_*.png
+.ignore/research/distance_calibration.png
+.ignore/research/kamon/README.md
+.ignore/research/kamon/LICENSE.txt
+.ignore/research/kamon/basic_charges.csv
+.ignore/research/kamon/synthetic_examples.py
+.ignore/research/kamon/descriptions.jsonl
+.ignore/research/kamon/expressions.txt
+.ignore/research/kamon/index_parsed_claude_all_translated_claude.jsonl
+.ignore/research/kamon_svg/png/
+.ignore/research/kamon_svg/wiki_licenses.csv
+.ignore/research/traditions/fonts/
+.ignore/research/heraldry/svg/
+.ignore/research/heraldry/png/
+
+# scratch / test leftovers
+_*.png
+*.tmp
