@@ -60,6 +60,12 @@ def safe_name(seed) -> str:
 def halo_for(seed) -> dict:
     """Deterministic, critic-approved halo for a public seed (any text). Returns the record plus its geometry."""
     seed = normalize_seed(seed)
+    from . import easter
+    key = easter.match(seed)
+    if key:
+        rec = easter.record(key)
+        if rec:
+            return {"seed": seed, "attempt": 0, "generator": GENERATOR_VERSION, **rec}
     for attempt in range(ATTEMPTS):
         it = sample(sub_seed(seed, attempt))
         ok, _, _, g = score(it["halo"])
