@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import html
+import json
 import random
 
 from .build import build
 from .critic import score
 from .generate import GENERATOR_VERSION, sample
+from . import stage
 from .render import extent, polygons, to_png
 
 MAX_SEED_LEN = 200
@@ -65,16 +67,41 @@ def halo_for(seed) -> dict:
     if key:
         rec = easter.record(key)
         if rec:
-            return {"seed": seed, "attempt": 0, "generator": GENERATOR_VERSION, **rec}
+            return _staged({"seed": seed, "attempt": 0, "generator": GENERATOR_VERSION, **rec})
     for attempt in range(ATTEMPTS):
         it = sample(sub_seed(seed, attempt))
         ok, _, _, g = score(it["halo"])
         if ok:
-            return {"seed": seed, "attempt": attempt, "generator": GENERATOR_VERSION, "color": it["color"],
-                    "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": g}
+            return _staged({"seed": seed, "attempt": attempt, "generator": GENERATOR_VERSION, "color": it["color"],
+                            "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": g})
     it = sample(sub_seed(seed, 0))   # practically unreachable (~60% of samples pass); fall back to the raw sample
-    return {"seed": seed, "attempt": -1, "generator": GENERATOR_VERSION, "color": it["color"],
-            "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": build(it["halo"])}
+    return _staged({"seed": seed, "attempt": -1, "generator": GENERATOR_VERSION, "color": it["color"],
+                    "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": build(it["halo"])})
+
+
+def _staged(rec: dict) -> dict:
+    """Add the 3D staging: rec["stage_ops"], rec["stage"] (label), rec["parts"] (planar parts placed in 3D)."""
+    if "stage_ops" not in rec:
+        rec["stage_ops"], rec["stage"] = stage.choose(rec["geometry"], rec["desc"], rec["seed"])
+    rec["parts"] = stage.apply(rec["geometry"], rec["stage_ops"], rec.get("untilt", 1.0))
+    return rec
+
+
+def view_geometry(rec: dict, view="front"):
+    """2D geometry of the halo seen from a named view (stage.VIEWS) or an (azimuth, elevation, roll) tuple."""
+    az, el, roll = stage.VIEWS[view] if isinstance(view, str) else view
+    if el >= 89.999 and not az and not roll and rec.get("untilt", 1.0) == 1.0:
+        return rec["geometry"]          # face-on: exactly the flat design
+    return stage.project(rec["parts"], az, el, roll)
+
+
+def to_json3d(rec: dict) -> str:
+    return json.dumps({"seed": rec["seed"], "type": rec["type"], "stage": rec.get("stage"),
+                       **stage.to_json(rec["parts"], rec["color"])})
+
+
+def to_gltf(rec: dict, color: str | None = None) -> str:
+    return stage.to_gltf(rec["parts"], normalize_color(color) or rec["color"])
 
 
 def _lighten(color: str, k: float = 0.25) -> str:
@@ -84,10 +111,10 @@ def _lighten(color: str, k: float = 0.25) -> str:
 
 
 def svg(rec: dict, size: int = 512, color: str | None = None, background: str | None = None,
-        glow: float = 0.035) -> str:
+        glow: float = 0.035, view="front") -> str:
     """Standalone SVG matching the PNG look: soft glow in the halo color + slightly brightened core.
     background=None -> transparent. Model space is y-up, flipped for SVG."""
-    g = rec["geometry"]
+    g = view_geometry(rec, view)
     color = normalize_color(color) or rec["color"]
     E = extent(g)
     d = []
@@ -107,6 +134,6 @@ def svg(rec: dict, size: int = 512, color: str | None = None, background: str | 
 
 
 def png(rec: dict, path: str | None = None, size: int = 512, color: str | None = None,
-        background: tuple = (30, 30, 36)):
+        background: tuple = (30, 30, 36), view="front"):
     """PNG via Pillow (CLI only; the web page rasterizes the SVG in the browser)."""
-    return to_png(rec["geometry"], path, normalize_color(color) or rec["color"], px=size, bg=background)
+    return to_png(view_geometry(rec, view), path, normalize_color(color) or rec["color"], px=size, bg=background)

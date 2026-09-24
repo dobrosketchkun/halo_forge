@@ -7,7 +7,9 @@ Python, web page - https://dobrosketchkun.github.io/halo_forge/).
 ![24 generated halos: reticle, flanked ring, crest, flower, star, pinwheel, kamon, heraldic, sigil, knot, crescent,
 segmented, polygon frame, emblem and scatter types](docs/showcase.png)
 
-*Each label is the seed: `python halo_cli.py --seed show17` (or `?seed=show17` on the web page) gives the same halo.*
+*Seen from the default "above head" view. Each label is the seed (`python halo_cli.py --seed show17`, or
+`?seed=show17` on the web page), the halo type and, if it is not a single plane, its 3D arrangement: **stacked**
+(inner layers sink), **crossed** (top element stands up), **solid** (thick band), **fan** (blades angled).*
 
 ## Web page
 

@@ -59,10 +59,29 @@ def match(seed):
     return None
 
 
+_stage = None
+
+
+def _load_stage():
+    global _stage
+    if _stage is None:
+        path = os.path.join(_DATA, "ba_stage.json")
+        if os.path.exists(path):
+            _stage = json.load(open(path, encoding="utf-8"))
+        elif sys.platform == "emscripten":
+            from pyodide.http import open_url
+            _stage = json.loads(open_url("halo/data/ba_stage.json").read())
+        else:
+            _stage = {}
+    return _stage
+
+
 def record(key):
     from shapely import wkt
     h = _load_halos().get(key)
     if not h:
         return None
+    st = _load_stage().get(key, {})
     return {"type": key, "color": h["color"], "desc": {"skeleton": "character"}, "halo": None,
-            "geometry": wkt.loads(h["wkt"])}
+            "geometry": wkt.loads(h["wkt"]), "stage_ops": st.get("ops", []), "untilt": st.get("untilt", 1.0),
+            "stage": "character " + st.get("category", "")}

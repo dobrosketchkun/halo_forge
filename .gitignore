@@ -32,3 +32,9 @@ __pycache__/
 # scratch / test leftovers
 _*.png
 *.tmp
+
+# large depth-research images (portraits, booru, pairs) - re-download via SchaleDB / Safebooru
+.ignore/research/depth/portrait/
+.ignore/research/depth/lobby/
+.ignore/research/depth/booru/
+.ignore/research/depth/pairs/
