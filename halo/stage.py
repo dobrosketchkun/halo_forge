@@ -212,9 +212,13 @@ def project(parts, az=0.0, el=90.0, roll=0.0):
             a, b, d, e = r @ A[:, 0], r @ A[:, 1], u @ A[:, 0], u @ A[:, 1]
             proj = affinity.affine_transform(g, [a, b, d, e, float(r @ t), float(u @ t)])
             if proj.area < 1e-4 * max(g.area, 1e-9):   # plane seen edge-on: keep it visible as a thin line
-                proj = proj.buffer(0.004 * outer_radius(g) + 1e-4)
+                # the squashed polygon is degenerate: build the line from its outline with capsules (never throws)
+                from . import _segment_buffer
+                import shapely as _sh
+                outline = _sh.MultiLineString([q.exterior for q in polygons(proj)] or [])
+                proj = _segment_buffer(outline, 0.004 * outer_radius(g) + 1e-4) if not outline.is_empty else proj
             out.append(proj)
-    return unary_union(out).buffer(0)
+    return unary_union(out)   # already a clean snapped union (no repair pass: fragile in old GEOS)
 
 
 # ---------------------------------------------------------------- serialisation (web preview, JSON, glTF)
