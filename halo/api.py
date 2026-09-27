@@ -13,7 +13,7 @@ import json
 import random
 
 from .build import build
-from .critic import score
+from .critic import LAST, score
 from .generate import GENERATOR_VERSION, sample
 from . import stage
 from .render import extent, polygons, to_png
@@ -73,14 +73,19 @@ def halo_for(seed) -> dict:
         ok, _, _, g = score(it["halo"])
         if ok:
             return _staged({"seed": seed, "attempt": attempt, "generator": GENERATOR_VERSION, "color": it["color"],
-                            "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": g})
+                            "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": g,
+                            "elements": LAST["builder"].elements})
     it = sample(sub_seed(seed, 0))   # practically unreachable (~60% of samples pass); fall back to the raw sample
     return _staged({"seed": seed, "attempt": -1, "generator": GENERATOR_VERSION, "color": it["color"],
                     "type": it["desc"]["skeleton"], "desc": it["desc"], "halo": it["halo"], "geometry": build(it["halo"])})
 
 
 def _staged(rec: dict) -> dict:
-    """Add the 3D staging: rec["stage_ops"], rec["stage"] (label), rec["parts"] (planar parts placed in 3D)."""
+    """Add the 3D staging: rec["stage"] (label), rec["parts"] (planar parts placed in 3D).
+    Generated halos are staged per element (they know their frame / copies); character halos use their table."""
+    if rec.get("elements") is not None and "stage_ops" not in rec:
+        rec["parts"], rec["stage"] = stage.choose_elements(rec["geometry"], rec.pop("elements"), rec["desc"], rec["seed"])
+        return rec
     if "stage_ops" not in rec:
         rec["stage_ops"], rec["stage"] = stage.choose(rec["geometry"], rec["desc"], rec["seed"])
     rec["parts"] = stage.apply(rec["geometry"], rec["stage_ops"], rec.get("untilt", 1.0))

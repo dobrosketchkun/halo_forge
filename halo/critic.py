@@ -25,9 +25,13 @@ def outer_radius(g):
     return max(math.hypot(x, y) for x, y in [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]) / math.sqrt(2) * 1.0
 
 
+LAST = {}   # builder of the most recent score() call (its .elements are reused for 3D staging)
+
+
 def score(spec: dict):
     b = Builder(spec)
     g = b.build()
+    LAST["builder"] = b
     reasons = []
     if g.is_empty:
         return False, {}, ["empty"], g

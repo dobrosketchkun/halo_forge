@@ -8,7 +8,10 @@ Python, web page - https://dobrosketchkun.github.io/halo_forge/).
 segmented, polygon frame, emblem and scatter types](docs/showcase.png)
 
 *Seen from the default "above head" view. Each label is the seed (`python halo_cli.py --seed show17`, or
-`?seed=show17` on the web page), the halo type and, if it is not a single plane, its 3D arrangement: **stacked**
+`?seed=show17` on the web page), the halo type and, if it is not a single plane, its 3D arrangement:
+**stacked** (inner layers sink), **stand up** (top element rises), **wings** (side elements angle up),
+**hang** (bottom element hangs down), **crown** (the ring is a vertical band), **orbit** (satellites at different
+heights), **tilt** (inner ring tilted against the outer), **lotus** (main elements rise into a cone).**stacked**
 (inner layers sink), **crossed** (top element stands up), **solid** (thick band), **fan** (blades angled).*
 
 ## Web page

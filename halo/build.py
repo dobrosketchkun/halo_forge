@@ -255,6 +255,7 @@ class Builder:
             if n_i.get("render") == "line":
                 g = g.boundary.buffer(float(n_i.get("line_weight", 0.04)) / 2, 32)
             geoms.append(g)
+            self._inst_geoms.append((M, g))
         if node.get("id"):
             self.registry[node["id"]] = insts
         return unary_union(geoms) if geoms else EMPTY
@@ -262,8 +263,13 @@ class Builder:
     def build(self) -> BaseGeometry:
         acc = EMPTY
         self.role_geoms: dict[str, BaseGeometry] = {}
-        for node in self.spec.get("root", []):
+        self.elements = []   # per root node: role, shape, node spec and every instance (matrix, geometry) - for 3D staging
+        for k, node in enumerate(self.spec.get("root", [])):
+            self._inst_geoms = []
             g = self.build_node(node)
+            if _op(node.get("combine", "union"))[0] != "subtract":
+                self.elements.append({"k": k, "role": node.get("role", "frame" if k == 0 else "support"),
+                                      "shape": node.get("shape"), "node": node, "insts": list(self._inst_geoms)})
             acc = combine(acc, g, node.get("combine", "union"))
             role = node.get("role")
             if role and _op(node.get("combine", "union"))[0] != "subtract":
