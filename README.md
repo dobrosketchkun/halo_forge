@@ -17,7 +17,7 @@ heights), **tilt** (inner ring tilted against the outer), **lotus** (main elemen
 
 `index.html` is a static page for GitHub Pages. It runs the Python generator in the browser (Pyodide), so there is
 no server. Features: random halo, halo by seed, a rotatable 3D preview (drag in any direction / scroll; preset views:
-top, above head, side, isometric, edge), custom color (picker, hex, presets) or the seed's own color, image download
+top, above head, side, isometric, edge; optional anime head under the halo for scale), custom color (picker, hex, presets) or the seed's own color, image download
 of any view (SVG, or PNG 512–2048 px, transparent or dark), 3D download (glTF binary, vector JSON), shareable links:
 `https://<user>.github.io/<repo>/?seed=tralala` or with a color `?seed=tralala&color=ff8800`.
 
@@ -82,6 +82,7 @@ freezes it in a registry, so later generator changes never alter an issued halo.
 | `halo/unique.py`, `issue.py` | uniqueness distance and per-person issuance |
 | `halo/data/` | traced kamon (public domain / CC0) and heraldic charges (Armoria, CC0 / CC BY-NC-SA), taste weights |
 | `halo_cli.py`, `index.html` | command line and web page |
+| `docs/heads/` | preview-only head model (VRoid Studio's CC0 base template + hair sample), never part of exports |
 
 Licenses of traced motifs are recorded per item in `halo/data/*.json`. Some heraldic charges are CC BY-NC-SA:
 non-commercial use only, with attribution.

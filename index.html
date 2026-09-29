@@ -40,7 +40,8 @@
   .stage.light { background: #f3f4f7; }
   #art { position: absolute; inset: 0; cursor: grab; touch-action: none; }
   #art:active { cursor: grabbing; }
-  #art canvas { width: 100%; height: 100%; display: block; }
+  #art canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .views .sep { width: 1px; background: var(--line); margin: 2px 4px; }
   .views { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
   .views button { font-family: var(--display); font-size: 12px; letter-spacing: .05em; padding: 4px 10px; border-radius: 999px;
                    border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 80%, transparent); color: var(--muted); }
@@ -119,6 +120,8 @@
           <button data-view="side">Side</button>
           <button data-view="iso">Isometric</button>
           <button data-view="edge">Edge</button>
+          <span class="sep" aria-hidden="true"></span>
+          <button id="headBtn" aria-pressed="false" title="Show a head under the halo (preview only)">Head</button>
         </div>
         <div class="overlay" id="overlay"><div><div class="spinner"></div><div id="overlayText">Loading the generator…</div></div></div>
       </div>
@@ -199,6 +202,7 @@
 import * as THREE from "three";
 import { TrackballControls } from "three/addons/controls/TrackballControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 // Same view definitions as halo/stage.py VIEWS: [azimuth, elevation, roll]
 const VIEWS = { top: [0, 89.9, 0], front: [0, 35, 0], iso: [45, 35.264, 0], side: [60, 25, 0], edge: [0, 12, 0] };
@@ -213,8 +217,107 @@ const controls = new TrackballControls(camera, renderer.domElement);
 controls.rotateSpeed = 3.2; controls.zoomSpeed = 1.2; controls.noPan = true;
 controls.staticMoving = false; controls.dynamicDampingFactor = 0.15;
 controls.minZoom = 0.5; controls.maxZoom = 4;
-controls.addEventListener("start", () => { for (const x of document.getElementById("views").children) x.classList.remove("on"); });
+controls.addEventListener("start", () => { for (const x of document.querySelectorAll("#views [data-view]")) x.classList.remove("on"); });
 let group = null, billboards = [], R = 1.5, color = "#7fe7ff", light = false;
+
+// Optional head under the halo (preview only: drawn on its own canvas behind the halo, so it never glows and is
+// never exported; an invisible depth-only copy in the halo scene hides the halo parts behind the head).
+// docs/heads/head.glb, from VRoid Studio's CC0 base template + hair sample; origin = top of the skull, face +Z.
+const HEAD_URL = "docs/heads/head.glb";
+const SKULL_W = 0.22;                    // skull width in the head models (m)
+const headRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+headRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+headRenderer.domElement.style.pointerEvents = "none";
+host.prepend(headRenderer.domElement);
+const headScene = new THREE.Scene();
+headScene.add(new THREE.HemisphereLight(0xffffff, 0x8890a0, 1.9));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+headScene.add(keyLight, keyLight.target);
+// cel shading like the anime originals: two light steps over the painted textures
+const toonRamp = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255, 255, 255, 255, 255]), 2, 1);
+toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter; toonRamp.needsUpdate = true;
+// the neck fades out instead of ending at a hard cut. A depth-only pre-pass of the opaque parts makes the fade
+// reveal the background, not the nape behind the neck; the originally transparent parts (eyelashes, eye
+// highlights) draw last and are left out of the pre-pass, so they are never covered.
+const neckFade = { value: new THREE.Vector2(-1, -0.9) };
+function toonOf(m) {
+  // the base templates tint a grey scalp texture teal via the color factor; the build script made it neutral dark
+  const color = /HairBack/.test(m.name) ? new THREE.Color(1, 1, 1) : m.color;
+  const t = new THREE.MeshToonMaterial({ map: m.map, color, gradientMap: toonRamp,
+                                         side: /SKIN/.test(m.name) ? THREE.FrontSide : THREE.DoubleSide,   // open neck: no dark inside
+                                         transparent: true, alphaTest: m.alphaTest || (m.transparent ? 0 : 0.02),
+                                         depthWrite: !m.transparent,
+                                         // correct alpha on the transparent canvas (default blending squares alpha: dark fringes)
+                                         blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+                                         blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
+  t.onBeforeCompile = sh => {
+    sh.uniforms.neckFade = neckFade;
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vHeadY;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHeadY = position.y;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vHeadY;\nuniform vec2 neckFade;")
+      .replace("#include <alphahash_fragment>", "diffuseColor.a *= smoothstep(neckFade.x, neckFade.y, vHeadY);\n#include <alphahash_fragment>");
+  };
+  return t;
+}
+let headPromise = null, head = null, occluder = null, headOn = false, focusY = 0;
+function loadHead() {
+  return headPromise ??= new GLTFLoader().loadAsync(HEAD_URL).then(g => {
+    const occ = g.scene.clone(true);     // shares geometry; depth only (alpha-tested, so hair strands stay open)
+    occ.traverse(o => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      if (m.transparent) { o.visible = false; return; }
+      o.material = new THREE.MeshBasicMaterial({ map: m.map, alphaTest: 0.5, colorWrite: false, side: THREE.DoubleSide });
+      o.renderOrder = -1;
+    });
+    let bottom = 0;
+    const meshes = [];
+    g.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+    for (const o of meshes) {
+      const m = o.material;
+      if (/SKIN/.test(m.name)) { o.geometry.computeBoundingBox(); bottom = Math.min(bottom, o.geometry.boundingBox.min.y); }
+      o.renderOrder = m.transparent ? 2 : 1;
+      o.material = toonOf(m);
+      if (!m.transparent) {
+        const depth = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({ map: m.map, alphaTest: 0.5, colorWrite: false,
+                                                                               side: o.material.side }));
+        depth.renderOrder = 0;
+        o.add(depth);
+      }
+    }
+    g.scene.userData.fade = [bottom + 0.003, bottom + 0.028];
+    g.scene.userData.occluder = occ;
+    return g.scene;
+  });
+}
+function placeHead() {
+  if (!head) return;
+  for (const o of [head, occluder]) {
+    o.scale.setScalar(1.45 * R / SKULL_W);   // halo a little wider than the skull
+    o.position.set(0, -0.4 * R, 0);          // floats just above the crown
+  }
+}
+function refocus() {
+  // with a head the camera orbits the halo + head together and zooms out to fit both
+  const y = headOn && head ? -1.1 * R : 0;
+  camera.position.y += y - focusY; controls.target.y += y - focusY; focusY = y;
+  resize();
+}
+async function showHead(on) {
+  headOn = on;
+  if (head && !on) {
+    headScene.remove(head); scene.remove(occluder); head = occluder = null;
+    headRenderer.clear();                    // otherwise the last head frame stays on its canvas
+  }
+  if (on && !head) {
+    const h = await loadHead();
+    if (!headOn || head) return;
+    head = h; occluder = h.userData.occluder;
+    headScene.add(head); scene.add(occluder);
+    neckFade.value.set(...head.userData.fade);
+  }
+  placeHead(); refocus();
+}
 
 // halo local space: z = normal (up). World: y up. local (x, y, z) -> world (x, z, -y)
 function makeGroup(data) {
@@ -272,7 +375,8 @@ function resize() {
   if (!w || !h) return;
   renderer.setSize(w, h, false);
   controls.handleResize?.();
-  const k = R * 1.35, a = w / h;
+  headRenderer.setSize(w, h, false);
+  const k = R * (headOn && head ? 2.0 : 1.35), a = w / h;
   camera.left = -k * a; camera.right = k * a; camera.top = k; camera.bottom = -k;
   camera.updateProjectionMatrix();
 }
@@ -289,9 +393,10 @@ function setView(name) {
   const { c, u } = localBasis(az, el), d = 20;
   camera.position.set(c.x * d, c.z * d, -c.y * d);   // local -> world
   camera.up.set(u.x, u.z, -u.y);
+  camera.position.y += focusY;
   camera.zoom = 1; camera.updateProjectionMatrix();
-  controls.target.set(0, 0, 0);
-  camera.lookAt(0, 0, 0);
+  controls.target.set(0, focusY, 0);
+  camera.lookAt(0, focusY, 0);
   controls.update();
 }
 function getView() {
@@ -312,6 +417,12 @@ function loop() {
     const inv = group.getWorldQuaternion(new THREE.Quaternion()).invert();
     for (const b of billboards) b.quaternion.copy(inv).multiply(camera.quaternion);
   }
+  if (head) {
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    keyLight.position.copy(camera.position).addScaledVector(camera.up, 12).addScaledVector(right, -8);
+    keyLight.target.position.copy(controls.target);
+    headRenderer.render(headScene, camera);
+  }
   renderer.render(scene, camera);
 }
 new ResizeObserver(resize).observe(host);
@@ -321,11 +432,11 @@ window.Halo3D = {
   load(data, c) {
     if (group) { scene.remove(group); group.traverse(o => { o.geometry?.dispose?.(); }); }
     group = makeGroup(data); scene.add(group);
-    color = c || data.color; applyColor(); resize();
+    color = c || data.color; applyColor(); placeHead(); refocus();
   },
   setColor(c) { color = c; applyColor(); },
   setLight(on) { light = on; applyColor(); },
-  setView, getView,
+  setView, getView, showHead,
   exportGLTF() {
     return new Promise((ok, bad) => new GLTFExporter().parse(group, ok, bad, { binary: true, onlyVisible: true }));
   },
@@ -532,9 +643,16 @@ $("dlJson").onclick = () => {
   if (customColor) j.color = customColor;
   download(new Blob([JSON.stringify(j)], { type: "application/json" }), `halo_${api.safe_name(current.seed)}.halo3d.json`);
 };
-for (const b of $("views").children) b.onclick = () => {
+const viewBtns = [...$("views").querySelectorAll("[data-view]")];
+for (const b of viewBtns) b.onclick = () => {
   window.Halo3D?.setView(b.dataset.view);
-  for (const x of $("views").children) x.classList.toggle("on", x === b);
+  for (const x of viewBtns) x.classList.toggle("on", x === b);
+};
+$("headBtn").onclick = () => {
+  const on = $("headBtn").getAttribute("aria-pressed") !== "true";
+  $("headBtn").setAttribute("aria-pressed", on); $("headBtn").classList.toggle("on", on);
+  window.Halo3DReady.then(() => window.Halo3D.showHead(on))
+    .catch(e => { console.error(e); setStatus("Could not load the head model.", true); });
 };
 $("copyLink").onclick = async () => {
   const link = pageUrl().toString();
